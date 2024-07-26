@@ -1,6 +1,3 @@
-Python Script Used:
-python
-Copy code
 import serial
 import time
 
