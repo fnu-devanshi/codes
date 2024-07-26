@@ -1,0 +1,79 @@
+Python Script Used:
+python
+Copy code
+import serial
+import time
+
+def calculate_temperature(raw_temp):
+    return -45 + 175 * (raw_temp / 65535.0)
+
+def calculate_humidity(raw_humidity):
+    return 100 * (raw_humidity / 65535.0)
+
+def parse_data(data):
+    if len(data) == 6:
+        raw_temp = (data[0] << 8) + data[1]
+        raw_humidity = (data[3] << 8) + data[4]
+        temperature = calculate_temperature(raw_temp)
+        humidity = calculate_humidity(raw_humidity)
+        return temperature, humidity
+    else:
+        return None, None
+
+def main():
+    try:
+        baud_rates = [9600, 19200, 38400, 57600, 115200]
+        port = 'COM17'
+        timeout = 1
+
+        for baud_rate in baud_rates:
+            print(f"Trying baud rate: {baud_rate}")
+            ser = serial.Serial(port, baud_rate, timeout=timeout)
+            time.sleep(2)
+
+            i2c_addresses = [0x44, 0x45]
+            commands = [
+                [0x24, 0x00],
+                [0x24, 0x16],
+                [0x24, 0x0B],
+                [0x2C, 0x06],
+                [0x2C, 0x0D],
+                [0x2C, 0x10],
+            ]
+
+            wait_time = 0.015
+            attempts_per_command = 5
+
+            for address in i2c_addresses:
+                print(f"Trying I2C address: {address}")
+                for command in commands:
+                    for attempt in range(attempts_per_command):
+                        ser.write(bytes([address << 1] + command))
+                        time.sleep(wait_time)
+
+                        data = ser.read(6)
+                        if len(data) == 6:
+                            temperature, humidity = parse_data(data)
+                            if temperature is not None and humidity is not None:
+                                print(f"Temperature: {temperature:.2f} °C, Humidity: {humidity:.2f} %")
+                                ser.close()
+                                return
+                            else:
+                                print("Failed to parse data")
+                        else:
+                            print(f"No data received for command {command} at address {address}, retrying...")
+                        time.sleep(1)
+
+            ser.close()
+
+        print("Exiting... No valid data received from any command or address with any baud rate.")
+
+    except serial.SerialException as e:
+        print(f"Serial error: {e}")
+    except KeyboardInterrupt:
+        print("Exiting...")
+    finally:
+        ser.close()
+
+if __name__ == "__main__":
+    main()
